@@ -1,4 +1,4 @@
-# 🎟️ TicketFlow - Distributed Concurrency Lab
+#  TicketFlow - Distributed Concurrency Lab
 
 Este projeto aplica conceitos fundamentais de **Sistemas Operacionais** e **Sistemas Distribuídos** para resolver o problema de disputa de recursos em aplicações Spring Boot.
 
