@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>TicketFlow Dashboard | Concurrency Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-900 text-white p-10 font-sans">
+<div class="max-w-5xl mx-auto">
+    <header class="mb-10 border-b border-slate-700 pb-5">
+        <h1 class="text-4xl font-bold text-blue-400">🎟️ TicketFlow Simulator</h1>
+        <p class="text-slate-400 mt-2">Laboratório de Sistemas Operacionais: Análise de Condições de Corrida e Resiliência</p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="bg-slate-800 p-6 rounded-xl shadow-xl h-fit">
+            <h3 class="text-lg font-semibold mb-4 text-slate-300">Configurações de Carga</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">THREADS SIMULTÂNEAS</label>
+                    <input id="threads" type="number" value="50" class="w-full bg-slate-700 p-3 rounded border border-slate-600 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">QUANTIDADE DE INGRESSOS</label>
+                    <input id="tickets" type="number" value="10" class="w-full bg-slate-700 p-3 rounded border border-slate-600 focus:outline-none focus:border-blue-500">
+                </div>
+                <button onclick="runSim()" id="btn-run" class="w-full bg-blue-600 hover:bg-blue-500 p-4 rounded-lg font-bold transition-all shadow-lg active:scale-95">
+                    Disparar Threads
+                </button>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-6">
+            <div id="results" class="hidden grid grid-cols-3 gap-4">
+                <div class="bg-slate-800 p-4 rounded-lg border-b-4 border-green-500 text-center">
+                    <p class="text-xs text-slate-400 uppercase">Vendas (Sucesso)</p>
+                    <h2 id="res-success" class="text-3xl font-bold mt-1">0</h2>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-lg border-b-4 border-red-500 text-center">
+                    <p class="text-xs text-slate-400 uppercase">Falhas (Esgotado)</p>
+                    <h2 id="res-fail" class="text-3xl font-bold mt-1">0</h2>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-lg border-b-4 border-blue-500 text-center">
+                    <p class="text-xs text-slate-400 uppercase">Latência Total</p>
+                    <h2 id="res-time" class="text-2xl font-bold mt-1">0ms</h2>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 p-6 rounded-xl shadow-xl min-h-[300px]">
+                <canvas id="simChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8">
+        <h3 class="text-sm font-semibold mb-2 text-slate-500 uppercase tracking-widest">Logs de Sincronização em Tempo Real</h3>
+        <div id="log-container" class="bg-black p-4 rounded-lg h-48 overflow-y-auto font-mono text-xs border border-slate-700 text-green-500 leading-relaxed">
+            <p class="opacity-50">// Sistema pronto para execução do escalonador...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let myChart = null;
+
+    async function runSim() {
+        const btn = document.getElementById('btn-run');
+        const threads = document.getElementById('threads').value;
+        const tickets = document.getElementById('tickets').value;
+        const logBox = document.getElementById('log-container');
+
+        btn.disabled = true;
+        btn.innerText = "Simulando...";
+        logBox.innerHTML = "<p class='text-yellow-400'>[SISTEMA] Disparando barreira CountDownLatch...</p>";
+
+        try {
+            const response = await fetch(`/api/simulation/run?threads=${threads}&tickets=${tickets}`, { method: 'POST' });
+            const data = await response.json();
+
+            // Atualizar Números
+            document.getElementById('results').classList.remove('hidden');
+            document.getElementById('res-success').innerText = data.successfulPurchases;
+            document.getElementById('res-fail').innerText = data.failures;
+            document.getElementById('res-time').innerText = data.executionTimeMs + "ms";
+
+            // Atualizar Logs
+            logBox.innerHTML = data.logs.map(log => `<p>${log}</p>`).join('');
+            logBox.scrollTop = logBox.scrollHeight;
+
+            // Gerar/Atualizar Gráfico
+            updateChart(data.successfulPurchases, data.failures);
+
+        } catch (error) {
+            logBox.innerHTML += `<p class='text-red-500'>[ERRO] Falha na comunicação com a API</p>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Disparar Threads";
+        }
+    }
+
+    function updateChart(success, fail) {
+        const ctx = document.getElementById('simChart').getContext('2d');
+
+        if (myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Sucessos (Integridade)', 'Falhas (Esgotamento)'],
+                datasets: [{
+                    label: 'Distribuição de Requisições Simultâneas',
+                    data: [success, fail],
+                    backgroundColor: ['#22c55e', '#ef4444'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#334155' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
