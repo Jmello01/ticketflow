@@ -1,0 +1,23 @@
+services:
+  ticket-app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_REDIS_HOST=ticket-redis
+      - SPRING_RABBITMQ_HOST=ticket-rabbitmq
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:ticketdb
+    depends_on:
+      - ticket-redis
+      - ticket-rabbitmq
+
+  ticket-redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  ticket-rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"

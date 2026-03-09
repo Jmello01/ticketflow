@@ -3,9 +3,11 @@ package com.joaoricardo.ticketflow.domain.controller;
 import com.joaoricardo.ticketflow.domain.dto.SimulationResult;
 import com.joaoricardo.ticketflow.domain.entity.Event;
 import com.joaoricardo.ticketflow.domain.repository.EventRepository;
+import com.joaoricardo.ticketflow.infrastructure.RabbitConfig;
 import com.joaoricardo.ticketflow.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate; // IMPORTANTE
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -23,6 +25,9 @@ public class TicketController {
     private final EventRepository repository;
     private final StringRedisTemplate redisTemplate;
     private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
+    private final io.micrometer.core.instrument.MeterRegistry registry;
+    private final AtomicInteger successCount = new AtomicInteger(0);
+
 
     @PostMapping("/run")
     public SimulationResult runSimulation(@RequestParam int threads, @RequestParam int tickets) throws InterruptedException {
@@ -38,7 +43,6 @@ public class TicketController {
 
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         CountDownLatch latch = new CountDownLatch(1);
-        AtomicInteger successCount = new AtomicInteger();
         List<String> logs = Collections.synchronizedList(new ArrayList<>());
 
         long startTime = System.currentTimeMillis();
@@ -53,12 +57,13 @@ public class TicketController {
                     Long remaining = redisTemplate.opsForValue().decrement("event:" + eventId + ":stock");
 
                     if (remaining != null && remaining >= 0) {
-                        // 2. Envia para a Fila (Assíncrono)
-                        rabbitTemplate.convertAndSend("tickets.queue", eventId);
+                        rabbitTemplate.convertAndSend(RabbitConfig.QUEUE_NAME, eventId);
                         successCount.incrementAndGet();
                         logs.add("Pedido enviado para a fila!");
                     } else {
-                        logs.add("Esgotado no Redis");
+                        // Métrica Customizada: Conta quantos foram barrados
+                        registry.counter("tickets.rejected.redis").increment();
+                        logs.add("Thread-" + threadId + ": Esgotado no Redis.");
                     }
                 } catch (Exception e) {
                     logs.add("Erro: " + e.getMessage());
@@ -79,5 +84,12 @@ public class TicketController {
                 (endTime - startTime),
                 logs
         );
+
+    }
+    @GetMapping("/reset")
+    public ResponseEntity<String> reset(@RequestParam Long eventId) {
+        successCount.set(0);
+        redisTemplate.opsForValue().set("event:" + eventId + ":stock", "10");
+        return ResponseEntity.ok("Bancada limpa para o Evento " + eventId);
     }
 }

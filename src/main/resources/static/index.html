@@ -128,6 +128,30 @@
             }
         });
     }
+// Função para ler os dados reais do Actuator
+async function fetchMetrics() {
+try {
+// Busca vendas reais confirmadas pelo Consumer no Banco
+const resSold = await fetch('/actuator/metrics/tickets.sold.database');
+const dataSold = await resSold.json();
+const totalSold = dataSold.measurements[0].value;
+
+// Busca rejeições reais feitas pelo Controller no Redis
+const resFail = await fetch('/actuator/metrics/tickets.rejected.redis');
+const dataFail = await resFail.json();
+const totalFail = dataFail.measurements[0].value;
+
+// Atualiza os elementos na tela
+document.getElementById('res-success').innerText = totalSold;
+document.getElementById('res-fail').innerText = totalFail;
+
+} catch (error) {
+// Silencioso: as métricas só aparecem após o primeiro disparo
+}
+}
+
+// Inicia a atualização automática a cada 2 segundos
+setInterval(fetchMetrics, 2000);
 </script>
 </body>
 </html>

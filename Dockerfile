@@ -1,0 +1,11 @@
+# Estágio 1: Build da aplicação
+FROM maven:3.9.6-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests -Dproject.build.sourceEncoding=UTF-8 -Dproject.reporting.outputEncoding=UTF-8
+
+# Estágio 2: Execução leve
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]

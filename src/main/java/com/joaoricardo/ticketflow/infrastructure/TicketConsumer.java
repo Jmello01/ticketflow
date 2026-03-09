@@ -13,17 +13,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class TicketConsumer {
 
     private final EventRepository repository;
+    private final io.micrometer.core.instrument.MeterRegistry registry;
 
-    @RabbitListener(queues = "tickets.queue")
+    @RabbitListener(queues = RabbitConfig.QUEUE_NAME)
     @Transactional
-    public void processPurchase(Long eventId) {
+    public void handleTicketPurchase(Long eventId) {
         try {
-            var event = repository.findById(eventId).orElseThrow();
-            event.setAvailableTickets(event.getAvailableTickets() - 1);
-            repository.save(event);
-            log.info("[BANCO] Venda processada com sucesso para o evento {}", eventId);
+            // 1. BUSCA o evento no banco usando o ID que veio na mensagem
+            // Isso cria a variável 'event' que o compilador não estava achando
+            var event = repository.findById(eventId)
+                    .orElseThrow(() -> new RuntimeException("Evento não encontrado"));
+
+            if (event.getAvailableTickets() > 0) {
+                event.setAvailableTickets(event.getAvailableTickets() - 1);
+
+                // 2. AGORA o 'repository.save(event)' vai funcionar!
+                repository.save(event);
+
+                registry.counter("tickets.sold.database").increment();
+                log.info("[DATABASE] Ingresso processado com sucesso!");
+            }
         } catch (Exception e) {
-            log.error("Erro ao processar venda no banco: {}", e.getMessage());
+            log.error("Erro ao processar venda: {}", e.getMessage());
         }
     }
 }
