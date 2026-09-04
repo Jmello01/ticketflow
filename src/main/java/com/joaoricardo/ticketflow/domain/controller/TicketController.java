@@ -4,11 +4,11 @@ import com.joaoricardo.ticketflow.domain.dto.SimulationResult;
 import com.joaoricardo.ticketflow.domain.entity.Event;
 import com.joaoricardo.ticketflow.domain.repository.EventRepository;
 import com.joaoricardo.ticketflow.infrastructure.RabbitConfig;
-import com.joaoricardo.ticketflow.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate; // IMPORTANTE
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,14 +19,32 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RestController
 @RequestMapping("/api/simulation")
 @RequiredArgsConstructor
+@Slf4j
 public class TicketController {
 
-    private final TicketService ticketService;
+
     private final EventRepository repository;
     private final StringRedisTemplate redisTemplate;
     private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
     private final io.micrometer.core.instrument.MeterRegistry registry;
     private final AtomicInteger successCount = new AtomicInteger(0);
+
+
+    @jakarta.annotation.PostConstruct
+    public void configurarConfirmacoes() {
+        rabbitTemplate.setMandatory(true);
+
+        rabbitTemplate.setReturnsCallback(returned ->
+                log.error("[RABBIT] Mensagem não roteada! Evento={}, motivo{}",
+                        returned.getMessage(), returned.getReplyText())
+        );
+
+        rabbitTemplate.setConfirmCallback((correlationData, ack, cause) ->
+        {                if (!ack) {
+            log.error("[RABBIT] O broker recusou/perdeu a mensagem! causa={}", cause);
+         }
+        });
+    }
 
 
     @PostMapping("/run")
