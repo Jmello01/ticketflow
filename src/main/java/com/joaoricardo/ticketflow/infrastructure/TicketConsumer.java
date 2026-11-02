@@ -21,7 +21,7 @@ public class TicketConsumer {
            registry.counter("tickets.sold.database").increment();
            log.info("[DATABASE] Ingresso processado com sucesso!");
        } catch (Exception e) {
-           registry.counter("tickets,failed.database").increment();
+           registry.counter("tickets.failed.database").increment();
            log.info("Falha ao processar venda do evento {}: {}", eventId, e.getMessage());
        }
     }
