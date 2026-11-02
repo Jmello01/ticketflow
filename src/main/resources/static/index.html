@@ -16,7 +16,8 @@
             --line: #CBD5DD;
             --win: #0B7A6B;
             --lost: #B8C2CC;
-            --error: #C2410C;
+            --over: #C2410C;
+            --error: #101C28;
             --radius: 10px;
         }
         * { box-sizing: border-box; }
@@ -32,11 +33,19 @@
         header h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01em; }
         header p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
 
+        .modes { display: inline-flex; margin-top: 20px; padding: 4px; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
+        .modes button {
+            font: inherit; font-size: 0.875rem; font-weight: 600;
+            padding: 6px 16px; border: 0; border-radius: 999px;
+            background: transparent; color: var(--muted); cursor: pointer;
+        }
+        .modes button[aria-pressed=true] { background: var(--ink); color: var(--surface); }
+
         .layout {
             display: grid;
             grid-template-columns: 280px 1fr;
             gap: 24px;
-            margin-top: 32px;
+            margin-top: 24px;
             align-items: start;
         }
 
@@ -80,7 +89,7 @@
 
         :focus-visible { outline: 3px solid var(--win); outline-offset: 2px; }
 
-        .status { margin: 0; font-size: 0.875rem; color: var(--error); min-height: 1.4em; }
+        .status { margin: 0; font-size: 0.875rem; color: var(--over); min-height: 1.4em; }
 
         .summary h2 { margin: 0; font-size: clamp(1.5rem, 3.4vw, 2.25rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
         .summary h2 .win { color: var(--win); }
@@ -90,8 +99,8 @@
         .verdict[hidden] { display: none; }
 
         .field { margin-top: 20px; }
-        .field canvas { display: block; width: 100%; }
-        .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
+        canvas { display: block; width: 100%; }
+        .legend { display: flex; gap: 8px 20px; flex-wrap: wrap; margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
         .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; background: var(--c); }
 
         .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
@@ -110,9 +119,29 @@
         .log p { margin: 0; }
         .log .sold { color: #6EE7C8; font-weight: 700; }
 
+        .takeaway { margin: 0 0 16px; padding: 16px 20px; font-size: 1.125rem; font-weight: 600; line-height: 1.4; }
+        .columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 4px; align-content: start; }
+        .col.broken { border-color: var(--over); box-shadow: 0 0 0 1px var(--over); }
+        .col h3 { margin: 0; font-size: 1rem; font-weight: 800; }
+        .col .how { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+        .col .sold-count { font-size: 2.25rem; font-weight: 800; line-height: 1.1; margin-top: 8px; }
+        .col.broken .sold-count { color: var(--over); }
+        .col .of { font-size: 0.875rem; color: var(--muted); margin-bottom: 8px; }
+        .col .verdict { justify-self: start; margin: 10px 0 0; }
+        .col dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 12px 0 0; font-size: 0.875rem; }
+        .col dt { color: var(--muted); }
+        .col dd { margin: 0; font-weight: 600; text-align: right; }
+        .col dd.bad { color: var(--over); }
+        .col .note { margin: 8px 0 0; font-size: 0.8125rem; color: var(--muted); }
+        #compare .legend { margin-top: 16px; }
+        .caveat { margin: 16px 0 0; font-size: 0.8125rem; color: var(--muted); max-width: 80ch; }
+        [hidden] { display: none !important; }
+
         @media (max-width: 860px) {
             .layout { grid-template-columns: 1fr; }
             .stats { grid-template-columns: repeat(2, 1fr); }
+            .columns { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -120,7 +149,11 @@
 <div class="page">
     <header>
         <h1>TicketFlow</h1>
-        <p>Muitas threads disputam poucos ingressos ao mesmo tempo. O Redis decide quem leva, sem vender além do estoque.</p>
+        <p>Muitas threads disputam poucos ingressos ao mesmo tempo. Veja o que acontece com e sem as ferramentas certas para proteger o estoque.</p>
+        <div class="modes" id="modes" role="group" aria-label="Modo da simulação">
+            <button type="button" data-mode="simple" aria-pressed="true">Disputa simples</button>
+            <button type="button" data-mode="compare" aria-pressed="false">Comparar estratégias</button>
+        </div>
     </header>
 
     <div class="layout">
@@ -140,7 +173,7 @@
             <p class="status" id="status" role="alert"></p>
         </form>
 
-        <main>
+        <main id="simple">
             <section class="panel summary" aria-live="polite">
                 <h2 id="headline">Dispare a simulação para ver quem chega primeiro ao estoque.</h2>
                 <p id="subline">Cada célula abaixo é uma thread, na ordem em que foi atendida pelo Redis.</p>
@@ -168,6 +201,18 @@
                 <div class="log" id="log-container"><p>Nenhuma execução ainda.</p></div>
             </details>
         </main>
+
+        <main id="compare" hidden>
+            <p class="panel takeaway" id="takeaway" aria-live="polite">Dispare a comparação para rodar a mesma disputa nas três estratégias, uma após a outra.</p>
+            <div class="columns" id="columns"></div>
+            <div class="legend">
+                <span style="--c: var(--win)">Levou ingresso</span>
+                <span style="--c: var(--over)">Vendeu além do estoque</span>
+                <span style="--c: var(--lost)">Barrada</span>
+                <span style="--c: var(--error)">Desistiu após várias tentativas</span>
+            </div>
+            <p class="caveat">Cada estratégia usa um evento e um estoque próprios. Sem proteção e Redis atômico enviam as vendas pelo RabbitMQ até o banco. O lock otimista grava direto no banco, porque a decisão dele é a própria gravação. Os tempos medem só a decisão de quem leva o ingresso.</p>
+        </main>
     </div>
 </div>
 
@@ -176,65 +221,83 @@
     const fmt = n => Number(n).toLocaleString('pt-BR');
     const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const MAX_THREADS = 20000;
 
-    const canvas = $('field');
-    const ctx = canvas.getContext('2d');
-    let cells = null;     // tipos por thread: 'win' | 'lost' | 'error'
-    let layout = null;
-    let sweepFrame = 0;
+    /** Uma célula por thread, desenhada em canvas, na ordem de chegada. */
+    class Grid {
+        constructor(canvas) {
+            this.canvas = canvas;
+            this.ctx = canvas.getContext('2d');
+            this.types = null;
+            this.n = 0;
+            this.frame = 0;
+        }
 
-    function setup(n) {
-        const dpr = window.devicePixelRatio || 1;
-        const width = canvas.clientWidth || 600;
-        const size = Math.max(4, Math.min(18, Math.floor(Math.sqrt(width * 300 / n))));
-        const cols = Math.max(1, Math.floor(width / size));
-        const rows = Math.ceil(n / cols);
-        canvas.width = width * dpr;
-        canvas.height = rows * size * dpr;
-        canvas.style.height = rows * size + 'px';
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        layout = { size, cols, n };
+        setup(n) {
+            const dpr = window.devicePixelRatio || 1;
+            const width = this.canvas.clientWidth || 300;
+            const size = Math.max(4, Math.min(18, Math.floor(Math.sqrt(width * 300 / n))));
+            const cols = Math.max(1, Math.floor(width / size));
+            const rows = Math.ceil(n / cols);
+            this.canvas.width = width * dpr;
+            this.canvas.height = rows * size * dpr;
+            this.canvas.style.height = rows * size + 'px';
+            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            this.size = size;
+            this.cols = cols;
+            this.n = n;
+        }
+
+        paint(i, type) {
+            const { size, cols, ctx } = this;
+            const x = (i % cols) * size, y = Math.floor(i / cols) * size;
+            const gap = size > 7 ? 1.5 : 1;
+            ctx.fillStyle = type ? css('--' + type) : css('--line');
+            ctx.globalAlpha = type ? 1 : 0.45;
+            ctx.fillRect(x + gap / 2, y + gap / 2, size - gap, size - gap);
+            ctx.globalAlpha = 1;
+        }
+
+        preview(n) {
+            cancelAnimationFrame(this.frame);
+            this.types = null;
+            this.setup(n);
+            for (let i = 0; i < n; i++) this.paint(i, null);
+        }
+
+        show(types) {
+            cancelAnimationFrame(this.frame);
+            this.types = types;
+            const n = types.length;
+            this.setup(n);
+            if (reduceMotion) { types.forEach((t, i) => this.paint(i, t)); return; }
+            for (let i = 0; i < n; i++) this.paint(i, null);
+            const duration = 900;
+            const start = performance.now();
+            let drawn = 0;
+            const tick = now => {
+                const upTo = Math.min(n, Math.ceil(((now - start) / duration) * n));
+                for (; drawn < upTo; drawn++) this.paint(drawn, types[drawn]);
+                if (drawn < n) this.frame = requestAnimationFrame(tick);
+            };
+            this.frame = requestAnimationFrame(tick);
+        }
+
+        redraw(fallbackN) {
+            if (this.types) {
+                this.setup(this.types.length);
+                this.types.forEach((t, i) => this.paint(i, t));
+            } else if (this.canvas.clientWidth) {
+                this.preview(fallbackN);
+            }
+        }
     }
 
-    function colorFor(type) {
-        if (type === 'win') return css('--win');
-        if (type === 'error') return css('--error');
-        return css('--lost');
-    }
+    const mainGrid = new Grid($('field'));
+    let compareGrids = [];
+    let mode = 'simple';
 
-    function paint(i, type) {
-        const { size, cols } = layout;
-        const x = (i % cols) * size, y = Math.floor(i / cols) * size;
-        const gap = size > 7 ? 1.5 : 1;
-        ctx.fillStyle = type ? colorFor(type) : css('--line');
-        ctx.globalAlpha = type ? 1 : 0.45;
-        ctx.fillRect(x + gap / 2, y + gap / 2, size - gap, size - gap);
-        ctx.globalAlpha = 1;
-    }
-
-    function drawPreview(n) {
-        cancelAnimationFrame(sweepFrame);
-        cells = null;
-        setup(n);
-        for (let i = 0; i < n; i++) paint(i, null);
-    }
-
-    function drawResult(types) {
-        cancelAnimationFrame(sweepFrame);
-        const n = types.length;
-        setup(n);
-        if (reduceMotion) { types.forEach((t, i) => paint(i, t)); return; }
-        for (let i = 0; i < n; i++) paint(i, null);
-        const duration = 900;
-        const start = performance.now();
-        let drawn = 0;
-        const tick = now => {
-            const upTo = Math.min(n, Math.ceil(((now - start) / duration) * n));
-            for (; drawn < upTo; drawn++) paint(drawn, types[drawn]);
-            if (drawn < n) sweepFrame = requestAnimationFrame(tick);
-        };
-        sweepFrame = requestAnimationFrame(tick);
-    }
+    const threadsValue = () => Math.min(MAX_THREADS, Math.max(1, Number($('threads').value) || 1));
 
     function classify(log) {
         if (log.startsWith('Pedido enviado')) return 'win';
@@ -244,7 +307,9 @@
 
     function updateButtonLabel() {
         const n = Number($('threads').value) || 0;
-        $('btn-run').textContent = `Disparar ${fmt(n)} threads`;
+        $('btn-run').textContent = mode === 'compare'
+            ? `Comparar com ${fmt(n)} threads`
+            : `Disparar ${fmt(n)} threads`;
         document.querySelectorAll('#presets button').forEach(b =>
             b.setAttribute('aria-pressed', String(Number(b.dataset.n) === n)));
     }
@@ -259,7 +324,122 @@
         }));
     }
 
-    async function runSim(event) {
+    /* ---------- modo simples ---------- */
+    async function runSimple(threads, tickets) {
+        // zera o contador de vendas do controller para a rodada não acumular com a anterior
+        await fetch('/api/simulation/reset?eventId=1').catch(() => {});
+        const response = await fetch(`/api/simulation/run?threads=${threads}&tickets=${tickets}`, { method: 'POST' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+
+        mainGrid.show(data.logs.map(classify));
+        renderLog(data.logs);
+
+        const sold = data.successfulPurchases;
+        const rejected = data.failures;
+        const seconds = data.executionTimeMs / 1000;
+        $('headline').innerHTML = `<span class="win">${fmt(sold)}</span> de ${fmt(threads)} threads levaram ingresso`;
+        $('subline').textContent = `Estoque de ${fmt(tickets)}. As outras ${fmt(rejected)} foram barradas no Redis em ${fmt(data.executionTimeMs)} ms.`;
+        $('res-success').textContent = fmt(sold);
+        $('res-fail').textContent = fmt(rejected);
+        $('res-time').textContent = fmt(data.executionTimeMs) + ' ms';
+        $('res-rps').textContent = seconds > 0 ? fmt(Math.round(threads / seconds)) : '-';
+
+        const verdict = $('verdict');
+        verdict.hidden = false;
+        const ok = sold <= tickets;
+        verdict.className = 'verdict' + (ok ? '' : ' bad');
+        verdict.textContent = !ok
+            ? `Vendas acima do estoque: ${fmt(sold)} de ${fmt(tickets)}`
+            : sold === tickets
+                ? 'Consistente: vendas iguais ao estoque'
+                : 'Consistente: nenhuma venda além do estoque';
+    }
+
+    /* ---------- modo comparar ---------- */
+    const HOW = {
+        unprotected: 'Lê o estoque, confere e grava depois, em passos separados.',
+        optimistic: 'Banco com versão: quem perde a corrida lê de novo e tenta outra vez.',
+        redis: 'Redis desconta e confere numa única operação atômica.'
+    };
+
+    function column(result, tickets, index) {
+        const broken = result.oversold > 0;
+        const el = document.createElement('section');
+        el.className = 'col' + (broken ? ' broken' : '');
+
+        const add = (tag, cls, text) => {
+            const node = document.createElement(tag);
+            if (cls) node.className = cls;
+            if (text !== undefined) node.textContent = text;
+            el.appendChild(node);
+            return node;
+        };
+
+        add('h3', '', result.label);
+        add('p', 'how', HOW[result.id] || '');
+        add('div', 'sold-count', `${fmt(result.sold)} ${result.sold === 1 ? 'venda' : 'vendas'}`);
+        add('div', 'of', `estoque era ${fmt(tickets)}`);
+
+        const canvas = document.createElement('canvas');
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', `${result.label}: uma célula por thread, na ordem de chegada`);
+        el.appendChild(canvas);
+
+        const verdict = add('span', 'verdict' + (broken ? ' bad' : ''),
+            broken ? `Vendeu ${fmt(result.oversold)} a mais`
+                   : result.sold === tickets ? 'Correto: vendeu todo o estoque' : 'Correto: nenhuma venda além do estoque');
+
+        const dl = add('dl');
+        const row = (label, value, bad) => {
+            const dt = document.createElement('dt'); dt.textContent = label;
+            const dd = document.createElement('dd'); dd.textContent = value;
+            if (bad) dd.className = 'bad';
+            dl.append(dt, dd);
+        };
+        row('Decisão', fmt(result.decisionMs) + ' ms');
+        row('Estoque no banco', fmt(result.databaseStock), result.databaseStock < 0);
+        row('Caminho', result.usesQueue ? 'Redis, fila e banco' : 'Direto no banco');
+        if (result.errors > 0) row('Desistiram', fmt(result.errors));
+
+        if (!result.drained) add('p', 'note', 'A fila ainda estava processando ao fim da medição.');
+
+        let won = 0;
+        const types = result.outcomes.map(o => {
+            if (o === 'won') { won++; return won > tickets ? 'over' : 'win'; }
+            return o === 'error' ? 'error' : 'lost';
+        });
+        return { el, canvas, types };
+    }
+
+    function takeaway(data) {
+        const [unprotected, optimistic, redis] = data.strategies;
+        if (unprotected.oversold > 0) {
+            return `Sem proteção, ${fmt(unprotected.oversold)} ingressos foram vendidos além do estoque de ${fmt(data.tickets)}. `
+                + `O lock otimista levou ${fmt(optimistic.decisionMs)} ms e o Redis atômico ${fmt(redis.decisionMs)} ms, sem estourar.`;
+        }
+        return 'Desta vez a disputa sem proteção não estourou o estoque. Aumente as threads ou rode de novo: a falha depende de timing.';
+    }
+
+    async function runCompare(threads, tickets) {
+        const response = await fetch(`/api/simulation/compare?threads=${threads}&tickets=${tickets}`, { method: 'POST' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+
+        const columns = $('columns');
+        columns.replaceChildren();
+        const built = data.strategies.map((s, i) => column(s, data.tickets, i));
+        built.forEach(b => columns.appendChild(b.el));
+        compareGrids = built.map(b => {
+            const grid = new Grid(b.canvas);
+            grid.show(b.types);
+            return grid;
+        });
+        $('takeaway').textContent = takeaway(data);
+    }
+
+    /* ---------- eventos ---------- */
+    async function run(event) {
         event.preventDefault();
         const btn = $('btn-run');
         const threads = Number($('threads').value);
@@ -272,39 +452,10 @@
         }
 
         btn.disabled = true;
-        btn.textContent = 'Disparando…';
+        btn.textContent = mode === 'compare' ? 'Comparando…' : 'Disparando…';
 
         try {
-            // zera o contador de vendas do controller para a rodada não acumular com a anterior
-            await fetch('/api/simulation/reset?eventId=1').catch(() => {});
-            const response = await fetch(`/api/simulation/run?threads=${threads}&tickets=${tickets}`, { method: 'POST' });
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-            const data = await response.json();
-
-            const types = data.logs.map(classify);
-            cells = types;
-            drawResult(types);
-            renderLog(data.logs);
-
-            const sold = data.successfulPurchases;
-            const rejected = data.failures;
-            const seconds = data.executionTimeMs / 1000;
-            $('headline').innerHTML = `<span class="win">${fmt(sold)}</span> de ${fmt(threads)} threads levaram ingresso`;
-            $('subline').textContent = `Estoque de ${fmt(tickets)}. As outras ${fmt(rejected)} foram barradas no Redis em ${fmt(data.executionTimeMs)} ms.`;
-            $('res-success').textContent = fmt(sold);
-            $('res-fail').textContent = fmt(rejected);
-            $('res-time').textContent = fmt(data.executionTimeMs) + ' ms';
-            $('res-rps').textContent = seconds > 0 ? fmt(Math.round(threads / seconds)) : '-';
-
-            const verdict = $('verdict');
-            verdict.hidden = false;
-            const ok = sold <= tickets;
-            verdict.className = 'verdict' + (ok ? '' : ' bad');
-            verdict.textContent = !ok
-                ? `Vendas acima do estoque: ${fmt(sold)} de ${fmt(tickets)}`
-                : sold === tickets
-                    ? 'Consistente: vendas iguais ao estoque'
-                    : 'Consistente: nenhuma venda além do estoque';
+            await (mode === 'compare' ? runCompare(threads, tickets) : runSimple(threads, tickets));
         } catch (error) {
             $('status').textContent = 'Não foi possível concluir a simulação. Confira se o app está rodando em localhost:8080 e tente de novo.';
         } finally {
@@ -313,10 +464,26 @@
         }
     }
 
-    $('form').addEventListener('submit', runSim);
+    function setMode(next) {
+        mode = next;
+        document.querySelectorAll('#modes button').forEach(b =>
+            b.setAttribute('aria-pressed', String(b.dataset.mode === next)));
+        $('simple').hidden = next !== 'simple';
+        $('compare').hidden = next !== 'compare';
+        $('status').textContent = '';
+        updateButtonLabel();
+        if (next === 'simple') mainGrid.redraw(threadsValue());
+        else compareGrids.forEach(g => g.redraw());
+    }
+
+    $('form').addEventListener('submit', run);
+    $('modes').addEventListener('click', e => {
+        const next = e.target.dataset && e.target.dataset.mode;
+        if (next && next !== mode) setMode(next);
+    });
     $('threads').addEventListener('input', () => {
         updateButtonLabel();
-        if (!$('btn-run').disabled) drawPreview(Math.min(20000, Math.max(1, Number($('threads').value) || 1)));
+        if (mode === 'simple' && !$('btn-run').disabled) mainGrid.preview(threadsValue());
     });
     $('presets').addEventListener('click', e => {
         const n = e.target.dataset && e.target.dataset.n;
@@ -325,12 +492,12 @@
         $('threads').dispatchEvent(new Event('input'));
     });
     addEventListener('resize', () => {
-        if (cells) { setup(cells.length); cells.forEach((t, i) => paint(i, t)); }
-        else drawPreview(Math.max(1, Number($('threads').value) || 1));
+        if (mode === 'simple') mainGrid.redraw(threadsValue());
+        else compareGrids.forEach(g => g.redraw());
     });
 
     updateButtonLabel();
-    drawPreview(Number($('threads').value));
+    mainGrid.preview(threadsValue());
 </script>
 </body>
 </html>

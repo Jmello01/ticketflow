@@ -57,6 +57,23 @@ A infraestrutura foi totalmente orquestrada para subir com um único comando, el
 
 3. Acesse o Dashboard de Observabilidade no seu navegador: http://localhost:8080
 
+## Modo Comparar: o que acontece sem as ferramentas certas
+No dashboard, o modo **Comparar estratégias** roda a mesma disputa (1.000 threads, 10 ingressos) em três abordagens, cada uma com seu próprio evento e estoque:
+
+![Comparação: sem proteção vendeu 1.000 ingressos de um estoque de 10; lock otimista e Redis atômico venderam 10](docs/img/comparativo.jpg)
+
+| Estratégia | Como decide | Resultado medido (1.000 threads, 10 ingressos) |
+|---|---|---|
+| Sem proteção | Lê o estoque no Redis, confere e grava depois (`GET` + `SET`) | 1.000 vendas, estoque no banco em -990 |
+| Lock otimista | Banco com `@Version`, relendo em caso de conflito | 10 vendas, cerca de 200 ms |
+| Redis atômico | `DECR` em uma operação só | 10 vendas, cerca de 70 a 85 ms |
+
+Sem proteção e Redis atômico enviam as vendas pelo RabbitMQ até o banco. O lock otimista grava direto no banco, porque a decisão dele é a própria gravação.
+
+Como ler esses números: todas as threads são liberadas ao mesmo tempo por uma barreira (`CountDownLatch`), o que amplifica a janela entre a leitura e a escrita. É um cenário de pior caso, escolhido de propósito, e os tempos variam entre execuções e máquinas. A comparação cobre só a etapa de decidir quem leva o ingresso.
+
+A API também está disponível diretamente: `POST /api/simulation/compare?threads=1000&tickets=10`.
+
 ## Executando os Testes Automatizados
 O `TicketConcurrencyTest` usa o Redis real, então suba a infraestrutura antes:
 
@@ -64,6 +81,8 @@ O `TicketConcurrencyTest` usa o Redis real, então suba a infraestrutura antes:
 docker-compose up -d ticket-redis ticket-rabbitmq
 ./mvnw test
 ```
+
+Se o container `ticket-app` estiver rodando, pare-o antes (`docker-compose stop ticket-app`). Ele consome da mesma fila `tickets.queue` com um banco próprio, e os testes que esperam a fila esvaziar falham.
 
 ## Realizando o Teste de Estresse
 O sistema possui endpoints específicos para controle de estado e simulação.
