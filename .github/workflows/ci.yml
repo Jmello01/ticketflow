@@ -10,7 +10,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/ticketdb
+      SPRING_DATASOURCE_USERNAME: ticketflow
+      SPRING_DATASOURCE_PASSWORD: ticketflow
+
     services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ticketdb
+          POSTGRES_USER: ticketflow
+          POSTGRES_PASSWORD: ticketflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ticketflow -d ticketdb"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
       redis:
         image: redis:alpine
         ports:

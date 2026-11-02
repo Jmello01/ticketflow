@@ -6,10 +6,30 @@ services:
     environment:
       - SPRING_DATA_REDIS_HOST=ticket-redis
       - SPRING_RABBITMQ_HOST=ticket-rabbitmq
-      - SPRING_DATASOURCE_URL=jdbc:h2:mem:ticketdb
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://ticket-postgres:5432/ticketdb
+      - SPRING_DATASOURCE_USERNAME=ticketflow
+      - SPRING_DATASOURCE_PASSWORD=ticketflow
     depends_on:
-      - ticket-redis
-      - ticket-rabbitmq
+      ticket-postgres:
+        condition: service_healthy
+      ticket-redis:
+        condition: service_started
+      ticket-rabbitmq:
+        condition: service_started
+
+  ticket-postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=ticketdb
+      - POSTGRES_USER=ticketflow
+      - POSTGRES_PASSWORD=ticketflow
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketflow -d ticketdb"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
 
   ticket-redis:
     image: redis:alpine

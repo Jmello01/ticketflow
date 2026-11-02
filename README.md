@@ -4,6 +4,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2+-brightgreen?style=for-the-badge&logo=spring)
 ![Redis](https://img.shields.io/badge/Redis-red?style=for-the-badge&logo=redis)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-blue?style=for-the-badge&logo=docker)
 [![CI](https://github.com/Jmello01/ticketflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Jmello01/ticketflow/actions/workflows/ci.yml)
 
@@ -33,7 +34,7 @@ flowchart LR
     R -->|estoque > 0| Q[[RabbitMQ]]
     R -.->|esgotado| X[Rejeitado]
     Q --> C[Consumer]
-    C -->|retry otimista| D[(Banco H2)]
+    C -->|retry otimista| D[(PostgreSQL)]
 ```
 
 ##  Como Executar o Laboratório
@@ -65,8 +66,10 @@ No dashboard, o modo **Comparar estratégias** roda a mesma disputa (1.000 threa
 | Estratégia | Como decide | Resultado medido (1.000 threads, 10 ingressos) |
 |---|---|---|
 | Sem proteção | Lê o estoque no Redis, confere e grava depois (`GET` + `SET`) | 1.000 vendas, estoque no banco em -990 |
-| Lock otimista | Banco com `@Version`, relendo em caso de conflito | 10 vendas, cerca de 200 ms |
-| Redis atômico | `DECR` em uma operação só | 10 vendas, cerca de 70 a 85 ms |
+| Lock otimista | Banco com `@Version`, relendo em caso de conflito | 10 vendas, 176 a 560 ms |
+| Redis atômico | `DECR` em uma operação só | 10 vendas, 21 a 51 ms |
+
+Medido em PostgreSQL 16 (Docker), em quatro rodadas seguidas. A primeira rodada do lock otimista é a mais lenta, por causa do aquecimento da aplicação.
 
 Sem proteção e Redis atômico enviam as vendas pelo RabbitMQ até o banco. O lock otimista grava direto no banco, porque a decisão dele é a própria gravação.
 
@@ -83,6 +86,17 @@ docker-compose up -d ticket-redis ticket-rabbitmq
 ```
 
 Se o container `ticket-app` estiver rodando, pare-o antes (`docker-compose stop ticket-app`). Ele consome da mesma fila `tickets.queue` com um banco próprio, e os testes que esperam a fila esvaziar falham.
+
+Por padrão os testes usam um H2 em memória. Para rodá-los contra o PostgreSQL do compose (publicado na porta **5433**, para não colidir com um Postgres local na 5432):
+
+```bash
+docker-compose up -d ticket-postgres ticket-redis ticket-rabbitmq
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/ticketdb \
+SPRING_DATASOURCE_USERNAME=ticketflow SPRING_DATASOURCE_PASSWORD=ticketflow \
+./mvnw test
+```
+
+O CI do GitHub roda a suíte contra PostgreSQL.
 
 ## Realizando o Teste de Estresse
 O sistema possui endpoints específicos para controle de estado e simulação.
