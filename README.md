@@ -5,6 +5,7 @@
 ![Redis](https://img.shields.io/badge/Redis-red?style=for-the-badge&logo=redis)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq)
 ![Docker](https://img.shields.io/badge/Docker-blue?style=for-the-badge&logo=docker)
+[![CI](https://github.com/Jmello01/ticketflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Jmello01/ticketflow/actions/workflows/ci.yml)
 
 Um laboratório prático de **Sistemas Distribuídos** e **Engenharia de Performance** criado para resolver um dos problemas mais clássicos da computação: **Race Conditions (Condições de Corrida)** em sistemas de alta concorrência (venda de ingressos).
 
