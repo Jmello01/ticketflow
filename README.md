@@ -46,6 +46,14 @@ A infraestrutura foi totalmente orquestrada para subir com um único comando, el
      
        http://localhost:8080
 
+## Executando os Testes Automatizados
+O `TicketConcurrencyTest` usa o Redis real, então suba a infraestrutura antes:
+
+```bash
+docker-compose up -d ticket-redis ticket-rabbitmq
+./mvnw test
+```
+
 ## Realizando o Teste de Estresse
 O sistema possui endpoints específicos para controle de estado e simulação.
 
