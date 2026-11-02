@@ -2,156 +2,335 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>TicketFlow Dashboard | Concurrency Lab</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TicketFlow | Disputa por ingressos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #E9EEF2;
+            --surface: #FFFFFF;
+            --ink: #101C28;
+            --muted: #5A6B7B;
+            --line: #CBD5DD;
+            --win: #0B7A6B;
+            --lost: #B8C2CC;
+            --error: #C2410C;
+            --radius: 10px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: "Schibsted Grotesk", system-ui, sans-serif;
+            line-height: 1.5;
+        }
+        .page { max-width: 1080px; margin: 0 auto; padding: 40px 16px 64px; }
+
+        header h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01em; }
+        header p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 24px;
+            margin-top: 32px;
+            align-items: start;
+        }
+
+        .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+
+        form { display: grid; gap: 16px; }
+        label { display: grid; gap: 6px; font-size: 0.875rem; font-weight: 600; }
+        input[type=number] {
+            font: inherit; font-weight: 400;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--ink);
+            width: 100%;
+        }
+        .presets { display: flex; gap: 8px; flex-wrap: wrap; }
+        .presets button {
+            font: inherit; font-size: 0.8125rem;
+            padding: 4px 12px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--ink);
+            cursor: pointer;
+        }
+        .presets button:hover { background: var(--bg); }
+        .presets button[aria-pressed=true] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+        .run {
+            font: inherit; font-weight: 800;
+            padding: 14px 16px;
+            border: 0;
+            border-radius: 8px;
+            background: var(--ink);
+            color: var(--surface);
+            cursor: pointer;
+        }
+        .run:hover:not(:disabled) { background: #1d3246; }
+        .run:disabled { opacity: 0.6; cursor: progress; }
+
+        :focus-visible { outline: 3px solid var(--win); outline-offset: 2px; }
+
+        .status { margin: 0; font-size: 0.875rem; color: var(--error); min-height: 1.4em; }
+
+        .summary h2 { margin: 0; font-size: clamp(1.5rem, 3.4vw, 2.25rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
+        .summary h2 .win { color: var(--win); }
+        .summary p { margin: 8px 0 0; color: var(--muted); }
+        .verdict { display: inline-block; margin-top: 12px; padding: 4px 12px; border-radius: 999px; font-size: 0.875rem; font-weight: 600; background: #D7EFEA; color: #07574C; }
+        .verdict.bad { background: #FBE0D3; color: #8A2F08; }
+        .verdict[hidden] { display: none; }
+
+        .field { margin-top: 20px; }
+        .field canvas { display: block; width: 100%; }
+        .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
+        .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; background: var(--c); }
+
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+        .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+        .stat dt { font-size: 0.8125rem; color: var(--muted); }
+        .stat dd { margin: 2px 0 0; font-size: 1.5rem; font-weight: 800; }
+
+        details { margin-top: 24px; }
+        summary { cursor: pointer; font-weight: 600; }
+        .log {
+            margin-top: 12px; height: 200px; overflow-y: auto;
+            background: var(--ink); color: #B9E3DC;
+            border-radius: var(--radius); padding: 12px 16px;
+            font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; line-height: 1.7;
+        }
+        .log p { margin: 0; }
+        .log .sold { color: #6EE7C8; font-weight: 700; }
+
+        @media (max-width: 860px) {
+            .layout { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-white p-10 font-sans">
-<div class="max-w-5xl mx-auto">
-    <header class="mb-10 border-b border-slate-700 pb-5">
-        <h1 class="text-4xl font-bold text-blue-400">🎟️ TicketFlow Simulator</h1>
-        <p class="text-slate-400 mt-2">Laboratório de Sistemas Operacionais: Análise de Condições de Corrida e Resiliência</p>
+<body>
+<div class="page">
+    <header>
+        <h1>TicketFlow</h1>
+        <p>Muitas threads disputam poucos ingressos ao mesmo tempo. O Redis decide quem leva, sem vender além do estoque.</p>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div class="bg-slate-800 p-6 rounded-xl shadow-xl h-fit">
-            <h3 class="text-lg font-semibold mb-4 text-slate-300">Configurações de Carga</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs text-slate-500 mb-1">THREADS SIMULTÂNEAS</label>
-                    <input id="threads" type="number" value="50" class="w-full bg-slate-700 p-3 rounded border border-slate-600 focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs text-slate-500 mb-1">QUANTIDADE DE INGRESSOS</label>
-                    <input id="tickets" type="number" value="10" class="w-full bg-slate-700 p-3 rounded border border-slate-600 focus:outline-none focus:border-blue-500">
-                </div>
-                <button onclick="runSim()" id="btn-run" class="w-full bg-blue-600 hover:bg-blue-500 p-4 rounded-lg font-bold transition-all shadow-lg active:scale-95">
-                    Disparar Threads
-                </button>
+    <div class="layout">
+        <form class="panel" id="form">
+            <label>Threads simultâneas
+                <input id="threads" type="number" min="1" max="20000" value="1000" inputmode="numeric">
+            </label>
+            <div class="presets" id="presets" role="group" aria-label="Valores prontos de threads">
+                <button type="button" data-n="100">100</button>
+                <button type="button" data-n="1000">1.000</button>
+                <button type="button" data-n="5000">5.000</button>
             </div>
-        </div>
+            <label>Ingressos em estoque
+                <input id="tickets" type="number" min="1" value="10" inputmode="numeric">
+            </label>
+            <button class="run" id="btn-run" type="submit">Disparar 1.000 threads</button>
+            <p class="status" id="status" role="alert"></p>
+        </form>
 
-        <div class="lg:col-span-2 space-y-6">
-            <div id="results" class="hidden grid grid-cols-3 gap-4">
-                <div class="bg-slate-800 p-4 rounded-lg border-b-4 border-green-500 text-center">
-                    <p class="text-xs text-slate-400 uppercase">Vendas (Sucesso)</p>
-                    <h2 id="res-success" class="text-3xl font-bold mt-1">0</h2>
-                </div>
-                <div class="bg-slate-800 p-4 rounded-lg border-b-4 border-red-500 text-center">
-                    <p class="text-xs text-slate-400 uppercase">Falhas (Esgotado)</p>
-                    <h2 id="res-fail" class="text-3xl font-bold mt-1">0</h2>
-                </div>
-                <div class="bg-slate-800 p-4 rounded-lg border-b-4 border-blue-500 text-center">
-                    <p class="text-xs text-slate-400 uppercase">Latência Total</p>
-                    <h2 id="res-time" class="text-2xl font-bold mt-1">0ms</h2>
-                </div>
-            </div>
+        <main>
+            <section class="panel summary" aria-live="polite">
+                <h2 id="headline">Dispare a simulação para ver quem chega primeiro ao estoque.</h2>
+                <p id="subline">Cada célula abaixo é uma thread, na ordem em que foi atendida pelo Redis.</p>
+                <span class="verdict" id="verdict" hidden></span>
 
-            <div class="bg-slate-800 p-6 rounded-xl shadow-xl min-h-[300px]">
-                <canvas id="simChart"></canvas>
-            </div>
-        </div>
-    </div>
+                <div class="field">
+                    <canvas id="field" role="img" aria-label="Uma célula por thread, na ordem de chegada ao Redis"></canvas>
+                    <div class="legend">
+                        <span style="--c: var(--win)">Levou ingresso</span>
+                        <span style="--c: var(--lost)">Barrada: estoque esgotado</span>
+                        <span style="--c: var(--error)">Erro</span>
+                    </div>
+                </div>
+            </section>
 
-    <div class="mt-8">
-        <h3 class="text-sm font-semibold mb-2 text-slate-500 uppercase tracking-widest">Logs de Sincronização em Tempo Real</h3>
-        <div id="log-container" class="bg-black p-4 rounded-lg h-48 overflow-y-auto font-mono text-xs border border-slate-700 text-green-500 leading-relaxed">
-            <p class="opacity-50">// Sistema pronto para execução do escalonador...</p>
-        </div>
+            <dl class="stats">
+                <div class="stat"><dt>Vendidos</dt><dd id="res-success">0</dd></div>
+                <div class="stat"><dt>Barrados</dt><dd id="res-fail">0</dd></div>
+                <div class="stat"><dt>Tempo total</dt><dd id="res-time">0 ms</dd></div>
+                <div class="stat"><dt>Requisições por segundo</dt><dd id="res-rps">0</dd></div>
+            </dl>
+
+            <details>
+                <summary>Log das threads</summary>
+                <div class="log" id="log-container"><p>Nenhuma execução ainda.</p></div>
+            </details>
+        </main>
     </div>
 </div>
 
 <script>
-    let myChart = null;
+    const $ = id => document.getElementById(id);
+    const fmt = n => Number(n).toLocaleString('pt-BR');
+    const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    async function runSim() {
-        const btn = document.getElementById('btn-run');
-        const threads = document.getElementById('threads').value;
-        const tickets = document.getElementById('tickets').value;
-        const logBox = document.getElementById('log-container');
+    const canvas = $('field');
+    const ctx = canvas.getContext('2d');
+    let cells = null;     // tipos por thread: 'win' | 'lost' | 'error'
+    let layout = null;
+    let sweepFrame = 0;
+
+    function setup(n) {
+        const dpr = window.devicePixelRatio || 1;
+        const width = canvas.clientWidth || 600;
+        const size = Math.max(4, Math.min(18, Math.floor(Math.sqrt(width * 300 / n))));
+        const cols = Math.max(1, Math.floor(width / size));
+        const rows = Math.ceil(n / cols);
+        canvas.width = width * dpr;
+        canvas.height = rows * size * dpr;
+        canvas.style.height = rows * size + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        layout = { size, cols, n };
+    }
+
+    function colorFor(type) {
+        if (type === 'win') return css('--win');
+        if (type === 'error') return css('--error');
+        return css('--lost');
+    }
+
+    function paint(i, type) {
+        const { size, cols } = layout;
+        const x = (i % cols) * size, y = Math.floor(i / cols) * size;
+        const gap = size > 7 ? 1.5 : 1;
+        ctx.fillStyle = type ? colorFor(type) : css('--line');
+        ctx.globalAlpha = type ? 1 : 0.45;
+        ctx.fillRect(x + gap / 2, y + gap / 2, size - gap, size - gap);
+        ctx.globalAlpha = 1;
+    }
+
+    function drawPreview(n) {
+        cancelAnimationFrame(sweepFrame);
+        cells = null;
+        setup(n);
+        for (let i = 0; i < n; i++) paint(i, null);
+    }
+
+    function drawResult(types) {
+        cancelAnimationFrame(sweepFrame);
+        const n = types.length;
+        setup(n);
+        if (reduceMotion) { types.forEach((t, i) => paint(i, t)); return; }
+        for (let i = 0; i < n; i++) paint(i, null);
+        const duration = 900;
+        const start = performance.now();
+        let drawn = 0;
+        const tick = now => {
+            const upTo = Math.min(n, Math.ceil(((now - start) / duration) * n));
+            for (; drawn < upTo; drawn++) paint(drawn, types[drawn]);
+            if (drawn < n) sweepFrame = requestAnimationFrame(tick);
+        };
+        sweepFrame = requestAnimationFrame(tick);
+    }
+
+    function classify(log) {
+        if (log.startsWith('Pedido enviado')) return 'win';
+        if (log.startsWith('Erro')) return 'error';
+        return 'lost';
+    }
+
+    function updateButtonLabel() {
+        const n = Number($('threads').value) || 0;
+        $('btn-run').textContent = `Disparar ${fmt(n)} threads`;
+        document.querySelectorAll('#presets button').forEach(b =>
+            b.setAttribute('aria-pressed', String(Number(b.dataset.n) === n)));
+    }
+
+    function renderLog(logs) {
+        const box = $('log-container');
+        box.replaceChildren(...logs.map(text => {
+            const p = document.createElement('p');
+            p.textContent = text;
+            if (text.startsWith('Pedido enviado')) p.className = 'sold';
+            return p;
+        }));
+    }
+
+    async function runSim(event) {
+        event.preventDefault();
+        const btn = $('btn-run');
+        const threads = Number($('threads').value);
+        const tickets = Number($('tickets').value);
+        $('status').textContent = '';
+
+        if (!(threads >= 1) || !(tickets >= 1)) {
+            $('status').textContent = 'Informe threads e ingressos com valores a partir de 1.';
+            return;
+        }
 
         btn.disabled = true;
-        btn.innerText = "Simulando...";
-        logBox.innerHTML = "<p class='text-yellow-400'>[SISTEMA] Disparando barreira CountDownLatch...</p>";
+        btn.textContent = 'Disparando…';
 
         try {
+            // zera o contador de vendas do controller para a rodada não acumular com a anterior
+            await fetch('/api/simulation/reset?eventId=1').catch(() => {});
             const response = await fetch(`/api/simulation/run?threads=${threads}&tickets=${tickets}`, { method: 'POST' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
             const data = await response.json();
 
-            // Atualizar Números
-            document.getElementById('results').classList.remove('hidden');
-            document.getElementById('res-success').innerText = data.successfulPurchases;
-            document.getElementById('res-fail').innerText = data.failures;
-            document.getElementById('res-time').innerText = data.executionTimeMs + "ms";
+            const types = data.logs.map(classify);
+            cells = types;
+            drawResult(types);
+            renderLog(data.logs);
 
-            // Atualizar Logs
-            logBox.innerHTML = data.logs.map(log => `<p>${log}</p>`).join('');
-            logBox.scrollTop = logBox.scrollHeight;
+            const sold = data.successfulPurchases;
+            const rejected = data.failures;
+            const seconds = data.executionTimeMs / 1000;
+            $('headline').innerHTML = `<span class="win">${fmt(sold)}</span> de ${fmt(threads)} threads levaram ingresso`;
+            $('subline').textContent = `Estoque de ${fmt(tickets)}. As outras ${fmt(rejected)} foram barradas no Redis em ${fmt(data.executionTimeMs)} ms.`;
+            $('res-success').textContent = fmt(sold);
+            $('res-fail').textContent = fmt(rejected);
+            $('res-time').textContent = fmt(data.executionTimeMs) + ' ms';
+            $('res-rps').textContent = seconds > 0 ? fmt(Math.round(threads / seconds)) : '-';
 
-            // Gerar/Atualizar Gráfico
-            updateChart(data.successfulPurchases, data.failures);
-
+            const verdict = $('verdict');
+            verdict.hidden = false;
+            const ok = sold <= tickets;
+            verdict.className = 'verdict' + (ok ? '' : ' bad');
+            verdict.textContent = !ok
+                ? `Vendas acima do estoque: ${fmt(sold)} de ${fmt(tickets)}`
+                : sold === tickets
+                    ? 'Consistente: vendas iguais ao estoque'
+                    : 'Consistente: nenhuma venda além do estoque';
         } catch (error) {
-            logBox.innerHTML += `<p class='text-red-500'>[ERRO] Falha na comunicação com a API</p>`;
+            $('status').textContent = 'Não foi possível concluir a simulação. Confira se o app está rodando em localhost:8080 e tente de novo.';
         } finally {
             btn.disabled = false;
-            btn.innerText = "Disparar Threads";
+            updateButtonLabel();
         }
     }
 
-    function updateChart(success, fail) {
-        const ctx = document.getElementById('simChart').getContext('2d');
+    $('form').addEventListener('submit', runSim);
+    $('threads').addEventListener('input', () => {
+        updateButtonLabel();
+        if (!$('btn-run').disabled) drawPreview(Math.min(20000, Math.max(1, Number($('threads').value) || 1)));
+    });
+    $('presets').addEventListener('click', e => {
+        const n = e.target.dataset && e.target.dataset.n;
+        if (!n) return;
+        $('threads').value = n;
+        $('threads').dispatchEvent(new Event('input'));
+    });
+    addEventListener('resize', () => {
+        if (cells) { setup(cells.length); cells.forEach((t, i) => paint(i, t)); }
+        else drawPreview(Math.max(1, Number($('threads').value) || 1));
+    });
 
-        if (myChart) myChart.destroy();
-
-        myChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Sucessos (Integridade)', 'Falhas (Esgotamento)'],
-                datasets: [{
-                    label: 'Distribuição de Requisições Simultâneas',
-                    data: [success, fail],
-                    backgroundColor: ['#22c55e', '#ef4444'],
-                    borderRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: '#334155' } },
-                    x: { grid: { display: false } }
-                }
-            }
-        });
-    }
-// Função para ler os dados reais do Actuator
-async function fetchMetrics() {
-try {
-// Busca vendas reais confirmadas pelo Consumer no Banco
-const resSold = await fetch('/actuator/metrics/tickets.sold.database');
-const dataSold = await resSold.json();
-const totalSold = dataSold.measurements[0].value;
-
-// Busca rejeições reais feitas pelo Controller no Redis
-const resFail = await fetch('/actuator/metrics/tickets.rejected.redis');
-const dataFail = await resFail.json();
-const totalFail = dataFail.measurements[0].value;
-
-// Atualiza os elementos na tela
-document.getElementById('res-success').innerText = totalSold;
-document.getElementById('res-fail').innerText = totalFail;
-
-} catch (error) {
-// Silencioso: as métricas só aparecem após o primeiro disparo
-}
-}
-
-// Inicia a atualização automática a cada 2 segundos
-setInterval(fetchMetrics, 2000);
+    updateButtonLabel();
+    drawPreview(Number($('threads').value));
 </script>
 </body>
 </html>

@@ -12,9 +12,9 @@ Um laboratório prático de **Sistemas Distribuídos** e **Engenharia de Perform
 ## O Desafio: O Teste de Estresse (I/O Bound)
 Como garantir que 1.000 pessoas tentando comprar 10 ingressos no exato mesmo milissegundo não resultem em "ingressos fantasmas" (vender mais do que o estoque)? Em sistemas mal desenhados, as múltiplas threads leem o banco de dados ao mesmo tempo, burlando a validação de estoque.
 
-Este projeto propõe uma arquitetura blindada que processa 1.000 requisições simultâneas em cerca de 1 segundo, mantendo **100% de consistência** matemática, sem travar o processador.
+Este projeto propõe uma arquitetura blindada que processa 1.000 requisições simultâneas em cerca de meio segundo a 1 segundo, mantendo **100% de consistência** matemática, sem travar o processador.
 
-![Dashboard do TicketFlow: 1.000 threads, 10 ingressos, 10 vendas e 990 falhas em 1111ms](docs/img/dashboard.jpg)
+![Dashboard do TicketFlow: 1.000 threads, 10 ingressos, 10 vendas e 990 barradas, uma célula por thread](docs/img/dashboard.jpg)
 
 ## Arquitetura e Solução
 
