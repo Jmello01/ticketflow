@@ -11,7 +11,9 @@ Um laboratório prático de **Sistemas Distribuídos** e **Engenharia de Perform
 ## O Desafio: O Teste de Estresse (I/O Bound)
 Como garantir que 1.000 pessoas tentando comprar 10 ingressos no exato mesmo milissegundo não resultem em "ingressos fantasmas" (vender mais do que o estoque)? Em sistemas mal desenhados, as múltiplas threads leem o banco de dados ao mesmo tempo, burlando a validação de estoque.
 
-Este projeto propõe uma arquitetura blindada que processa milhares de requisições simultâneas em menos de 1 segundo, mantendo **100% de consistência** matemática, sem travar o processador.
+Este projeto propõe uma arquitetura blindada que processa 1.000 requisições simultâneas em cerca de 1 segundo, mantendo **100% de consistência** matemática, sem travar o processador.
+
+![Dashboard do TicketFlow: 1.000 threads, 10 ingressos, 10 vendas e 990 falhas em 1111ms](docs/img/dashboard.jpg)
 
 ## Arquitetura e Solução
 
@@ -23,7 +25,15 @@ Para suportar o pico extremo de acessos, a arquitetura foi desenhada em camadas:
 4. **Consumer & Database:** Um worker consome a fila do RabbitMQ de forma cadenciada e salva no banco de dados com segurança.
 
 ### Fluxo da Informação
-`Usuário -> API Spring Boot -> (Validação Atômica) Redis -> RabbitMQ -> Consumer -> Banco de Dados`
+```mermaid
+flowchart LR
+    U[Usuários<br/>1.000 threads] --> A[API Spring Boot<br/>Virtual Threads]
+    A -->|DECR atômico| R[(Redis)]
+    R -->|estoque > 0| Q[[RabbitMQ]]
+    R -.->|esgotado| X[Rejeitado]
+    Q --> C[Consumer]
+    C -->|retry otimista| D[(Banco H2)]
+```
 
 ##  Como Executar o Laboratório
 
@@ -35,16 +45,16 @@ A infraestrutura foi totalmente orquestrada para subir com um único comando, el
 ### Passos
 1. Clone o repositório:
    ```bash
-   git clone [https://github.com/jmello01/ticketflow-simulator.git](https://github.com/jmello01/ticketflow-simulator.git)
-   cd ticketflow-simulator
+   git clone https://github.com/Jmello01/ticketflow.git
+   cd ticketflow
+   ```
 
 2. Suba a infraestrutura completa (App, Redis, RabbitMQ):
    ```bash
    docker-compose up --build -d
+   ```
 
-3. Acesse o Dashboard de Observabilidade no seu navegador:
-     
-       http://localhost:8080
+3. Acesse o Dashboard de Observabilidade no seu navegador: http://localhost:8080
 
 ## Executando os Testes Automatizados
 O `TicketConcurrencyTest` usa o Redis real, então suba a infraestrutura antes:
